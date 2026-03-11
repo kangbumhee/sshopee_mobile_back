@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -71,6 +71,7 @@ export default function HomePage() {
   const [previewImages, setPreviewImages] = useState(null);
 
   const [shopGroupData, setShopGroupData] = useState({ groups: [], selectedGroupId: null });
+  const [shopGroupDataLoaded, setShopGroupDataLoaded] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupShops, setNewGroupShops] = useState([]);
@@ -121,22 +122,26 @@ export default function HomePage() {
     if (user) {
       getShopGroups(user.uid).then(data => {
         setShopGroupData(data);
-      }).catch(e => console.error('Group load error:', e));
+        setShopGroupDataLoaded(true);
+      }).catch(e => {
+        console.error('Group load error:', e);
+        setShopGroupDataLoaded(true); // 실패해도 로딩 완료로 처리
+      });
     }
   }, [user]);
 
   // Load counts when shops and group data are both ready
   useEffect(() => {
-    if (shops.length > 0 && !loading) {
+    if (shops.length > 0 && !loading && shopGroupDataLoaded) {
       loadTotalCounts();
     }
-  }, [shops, shopGroupData.selectedGroupId, loading]);
+  }, [shops, shopGroupData.selectedGroupId, loading, shopGroupDataLoaded]);
 
   useEffect(() => {
-    if (shops.length > 0 && !loading) {
+    if (shops.length > 0 && !loading && shopGroupDataLoaded) {
       loadSalesData();
     }
-  }, [shops, loading, shopGroupData.selectedGroupId]);
+  }, [shops, loading, shopGroupData.selectedGroupId, shopGroupDataLoaded]);
 
   useEffect(() => {
     if (user) {
@@ -249,7 +254,9 @@ export default function HomePage() {
       const shopMap = {};
       const totals = { today: 0, yesterday: 0, recent7: 0, prev7: 0, recent30: 0, prev30: 0 };
 
-      const processOrders = (snap) => {
+      // rangeType: 'recent' | 'week' | 'month'
+      // recent = 오늘+어제, week = 2일~7일 전, month = 7일~30일 전
+      const processOrders = (snap, rangeType = 'recent') => {
         snap.forEach(doc => {
           const o = doc.data();
           const shopId = String(o.shop_id);
@@ -263,16 +270,31 @@ export default function HomePage() {
             };
           }
           const sm = shopMap[shopId];
-          if (ct >= todayStartUTC && ct <= now) { sm.today += amt; totals.today += amt; }
-          if (ct >= yesterdayStartUTC && ct < todayStartUTC) {
-            const elapsedToday = now - todayStartUTC;
-            const timeInYesterday = ct - yesterdayStartUTC;
-            if (timeInYesterday <= elapsedToday) { sm.yesterday += amt; totals.yesterday += amt; }
+
+          if (rangeType === 'recent') {
+            // 오늘
+            if (ct >= todayStartUTC && ct <= now) { sm.today += amt; totals.today += amt; }
+            // 어제
+            if (ct >= yesterdayStartUTC && ct < todayStartUTC) { sm.yesterday += amt; totals.yesterday += amt; }
+            // recent7, recent30 에도 포함 (오늘+어제도 7일/30일 범위)
+            if (ct >= recent7Start && ct <= now) { sm.recent7 += amt; totals.recent7 += amt; }
+            if (ct >= recent30Start && ct <= now) { sm.recent30 += amt; totals.recent30 += amt; }
           }
-          if (ct >= recent7Start && ct <= now) { sm.recent7 += amt; totals.recent7 += amt; }
-          if (ct >= prev7Start && ct < recent7Start) { sm.prev7 += amt; totals.prev7 += amt; }
-          if (ct >= recent30Start && ct <= now) { sm.recent30 += amt; totals.recent30 += amt; }
-          if (ct >= prev30Start && ct < recent30Start) { sm.prev30 += amt; totals.prev30 += amt; }
+
+          if (rangeType === 'week') {
+            // 2일~7일 전 구간 (오늘+어제 제외, prev7도 포함)
+            if (ct >= recent7Start && ct < yesterdayStartUTC) { sm.recent7 += amt; totals.recent7 += amt; }
+            if (ct >= prev7Start && ct < recent7Start) { sm.prev7 += amt; totals.prev7 += amt; }
+            // recent30 에도 포함
+            if (ct >= recent30Start && ct < yesterdayStartUTC) { sm.recent30 += amt; totals.recent30 += amt; }
+          }
+
+          if (rangeType === 'month') {
+            // 7일~30일 전 구간
+            if (ct >= prev30Start && ct < prev7Start) { sm.prev30 += amt; totals.prev30 += amt; }
+            // recent30 에도 포함
+            if (ct >= recent30Start && ct < prev7Start) { sm.recent30 += amt; totals.recent30 += amt; }
+          }
         });
       };
 
@@ -280,7 +302,7 @@ export default function HomePage() {
       const recentSnap = await getDocs(
         query(collection(firestore, 'users', uid, 'orders'), where('create_time', '>=', yesterdayStartUTC))
       );
-      processOrders(recentSnap);
+      processOrders(recentSnap, 'recent');
 
       // 먼저 오늘+어제 결과 표시
       const earlyTotals = { ...totals };
@@ -320,10 +342,20 @@ export default function HomePage() {
             totals.recent30 = c.totals.recent30; totals.prev30 = c.totals.prev30;
             // 샵별 데이터도 복원
             (c.shops || []).forEach(cs => {
-              if (shopMap[cs.shop_id]) {
-                shopMap[cs.shop_id].recent7 = cs.recent7; shopMap[cs.shop_id].prev7 = cs.prev7;
-                shopMap[cs.shop_id].recent30 = cs.recent30; shopMap[cs.shop_id].prev30 = cs.prev30;
+              if (targetShopIds && !targetShopIds.includes(String(cs.shop_id))) return;
+              if (!shopMap[cs.shop_id]) {
+                // 오늘/어제 주문이 없던 샵도 새로 생성
+                shopMap[cs.shop_id] = {
+                  shop_id: String(cs.shop_id),
+                  region: '', currency: '', shop_name: '', memo: '',
+                  today: 0, yesterday: 0,
+                  recent7: 0, prev7: 0, recent30: 0, prev30: 0,
+                };
               }
+              shopMap[cs.shop_id].recent7 = cs.recent7;
+              shopMap[cs.shop_id].prev7 = cs.prev7;
+              shopMap[cs.shop_id].recent30 = cs.recent30;
+              shopMap[cs.shop_id].prev30 = cs.prev30;
             });
             usedCache = true;
           }
@@ -338,7 +370,7 @@ export default function HomePage() {
               where('create_time', '>=', prev7Start),
               where('create_time', '<', yesterdayStartUTC))
           );
-          processOrders(week7Snap);
+          processOrders(week7Snap, 'week');
 
           // 30일 데이터 (위에서 읽은 범위 제외)
           const month30Snap = await getDocs(
@@ -346,7 +378,7 @@ export default function HomePage() {
               where('create_time', '>=', prev30Start),
               where('create_time', '<', prev7Start))
           );
-          processOrders(month30Snap);
+          processOrders(month30Snap, 'month');
 
           // cache save
           const cacheData = {
@@ -424,7 +456,8 @@ export default function HomePage() {
           const initCounts = { READY_TO_SHIP: 0, PROCESSED: 0, SHIPPED: 0, COMPLETED: 0, IN_CANCEL: 0, PENDING: 0 };
           cSnapInit.forEach(d => {
             const v = d.data();
-            if (initShopIds.has(String(v.shop_id || d.id))) {
+            const shopId = String(d.id); // doc.id 기준으로 통일
+            if (initShopIds.has(shopId)) {
               ['READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED', 'IN_CANCEL', 'PENDING'].forEach(k => { initCounts[k] += (v[k] || 0); });
               initCounts.IN_CANCEL += (v['CANCELLED'] || 0);
             }
