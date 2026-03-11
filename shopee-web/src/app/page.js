@@ -255,7 +255,6 @@ export default function HomePage() {
       const totals = { today: 0, yesterday: 0, recent7: 0, prev7: 0, recent30: 0, prev30: 0 };
 
       // rangeType: 'recent' | 'week' | 'month'
-      // recent = 오늘+어제, week = 2일~7일 전, month = 7일~30일 전
       const processOrders = (snap, rangeType = 'recent') => {
         snap.forEach(doc => {
           const o = doc.data();
@@ -273,27 +272,43 @@ export default function HomePage() {
 
           if (rangeType === 'recent') {
             // 오늘
-            if (ct >= todayStartUTC && ct <= now) { sm.today += amt; totals.today += amt; }
+            if (ct >= todayStartUTC && ct <= now) {
+              sm.today += amt; totals.today += amt;
+              sm.recent7 += amt; totals.recent7 += amt;
+              sm.recent30 += amt; totals.recent30 += amt;
+            }
             // 어제
-            if (ct >= yesterdayStartUTC && ct < todayStartUTC) { sm.yesterday += amt; totals.yesterday += amt; }
-            // recent7, recent30 에도 포함 (오늘+어제도 7일/30일 범위)
-            if (ct >= recent7Start && ct <= now) { sm.recent7 += amt; totals.recent7 += amt; }
-            if (ct >= recent30Start && ct <= now) { sm.recent30 += amt; totals.recent30 += amt; }
+            if (ct >= yesterdayStartUTC && ct < todayStartUTC) {
+              sm.yesterday += amt; totals.yesterday += amt;
+              sm.recent7 += amt; totals.recent7 += amt;
+              sm.recent30 += amt; totals.recent30 += amt;
+            }
           }
 
           if (rangeType === 'week') {
-            // 2일~7일 전 구간 (오늘+어제 제외, prev7도 포함)
-            if (ct >= recent7Start && ct < yesterdayStartUTC) { sm.recent7 += amt; totals.recent7 += amt; }
-            if (ct >= prev7Start && ct < recent7Start) { sm.prev7 += amt; totals.prev7 += amt; }
-            // recent30 에도 포함
-            if (ct >= recent30Start && ct < yesterdayStartUTC) { sm.recent30 += amt; totals.recent30 += amt; }
+            // 2일~7일 전 (recent7 범위, prev7 제외)
+            if (ct >= recent7Start && ct < yesterdayStartUTC) {
+              sm.recent7 += amt; totals.recent7 += amt;
+              sm.recent30 += amt; totals.recent30 += amt;
+            }
+            // 7일~14일 전 (prev7 범위)
+            if (ct >= prev7Start && ct < recent7Start) {
+              sm.prev7 += amt; totals.prev7 += amt;
+              if (ct >= recent30Start) {
+                sm.recent30 += amt; totals.recent30 += amt;
+              }
+            }
           }
 
           if (rangeType === 'month') {
-            // 7일~30일 전 구간
-            if (ct >= prev30Start && ct < prev7Start) { sm.prev30 += amt; totals.prev30 += amt; }
-            // recent30 에도 포함
-            if (ct >= recent30Start && ct < prev7Start) { sm.recent30 += amt; totals.recent30 += amt; }
+            // 14일~30일 전 (recent30 범위 안)
+            if (ct >= recent30Start && ct < prev7Start) {
+              sm.recent30 += amt; totals.recent30 += amt;
+            }
+            // 30일~60일 전 (prev30 범위)
+            if (ct >= prev30Start && ct < recent30Start) {
+              sm.prev30 += amt; totals.prev30 += amt;
+            }
           }
         });
       };
