@@ -1,0 +1,1 @@
+self.__REACT_LOADABLE_MANIFEST="{\"app\\\\page.js -> ../lib/firebase\":{\"id\":\"app\\\\page.js -> ../lib/firebase\",\"files\":[]},\"app\\\\page.js -> firebase/auth\":{\"id\":\"app\\\\page.js -> firebase/auth\",\"files\":[]},\"app\\\\page.js -> firebase/firestore\":{\"id\":\"app\\\\page.js -> firebase/firestore\",\"files\":[]}}"

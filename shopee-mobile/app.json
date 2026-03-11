@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "Shopee Mobile Manager",
+    "slug": "shopee-mobile-manager",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ee4d2d"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.shopee.mobilemanager",
+      "infoPlist": {
+        "NSCameraUsageDescription": "바코드/송장 스캔을 위해 카메라가 필요합니다."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ee4d2d"
+      },
+      "package": "com.shopee.mobilemanager",
+      "permissions": ["android.permission.CAMERA"]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "바코드/송장 스캔을 위해 카메라가 필요합니다."
+        }
+      ]
+    ]
+  }
+}
