@@ -452,7 +452,8 @@ export default function HomePage() {
           const fdbInit = getFirestore();
           const bgUid = (await import('firebase/auth')).getAuth().currentUser?.uid;
           const cSnapInit = bgUid ? await getDocs(collection(fdbInit, 'users', bgUid, 'orderCounts')) : { forEach: () => {} };
-          const initShopIds = new Set((filteredShops || shops).map(s => String(s.shop_id)));
+          const bgFilteredShops = (gid && gid !== 'all') ? filteredShops : shops;
+          const initShopIds = new Set(bgFilteredShops.map(s => String(s.shop_id)));
           const initCounts = { READY_TO_SHIP: 0, PROCESSED: 0, SHIPPED: 0, COMPLETED: 0, IN_CANCEL: 0, PENDING: 0 };
           cSnapInit.forEach(d => {
             const v = d.data();
